@@ -1,4 +1,9 @@
-#' @export segmentedLines
+#' @importFrom SIRItoGTFS stopstoSP
+#' @importFrom sp CRS spTransform SpatialPointsDataFrame SpatialLines
+#' @importFrom plyr join
+#' @importFrom rgeos gDistance
+#' @importFrom rgdal make_EPSG
+#' @export
 
 segmentedLines = function(route,
                           projcode,
@@ -8,31 +13,29 @@ segmentedLines = function(route,
                           stop_times = GTFSstop_times,
                           stops = GTFSstops){
 
-  require(plyr, quietly = TRUE)
-  require(SIRItoGTFS, quietly = TRUE)
+
   # Also uses rgeos and sp, but SIRItoGTFS is dependent on them
 
-  proj = rgdal::make_EPSG()
-  crswgs84 <- sp::CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
-  crs1 <- sp::CRS(proj$prj4[projcode])
+  proj = make_EPSG()
+  crswgs84 <- CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0")
+  crs1 <- CRS(proj$prj4[projcode])
 
 
   # Subset and order the shape and the stops within it.
 
-
-  shp = GTFSshapes[GTFSshapes$shape_id == 51854,]
+  rt = GTFSroutes[GTFSroutes$route_id %in% route,]
+  trip = GTFStrips[GTFStrips$route_id %in% rt$route_id,]
+  shp = GTFSshapes[GTFSshapes$shape_id %in% trips$shape_id,]
   shp = shp[order(shp$shape_pt_sequence),]
-  trip = GTFStrips[GTFStrips$shape_id %in% shp$shape_id,]
-  rt = GTFSroutes[GTFSroutes$route_id %in% trip$route_id,]
   st = GTFSstop_times[GTFSstop_times$trip_id %in% trip$trip_id,]
   stops1 = GTFSstops[GTFSstops$stop_id %in% st$stop_id,]
 
   # Join for the stop sequence, needed for each route/trip
-  stops1 = plyr::join(stops1,st,by = "stop_id", type = "left", match = "first")
+  stops1 = join(stops1,st,by = "stop_id", type = "left", match = "first")
   stops1 = stops1[order(stops1$stop_sequence),]
 
   # convert stops to ILTM and visualize them
-  stops2 = SIRItoGTFS::stopstoSP(stops1,4326,useSIRI = FALSE)
+  stops2 = stopstoSP(stops1,4326,useSIRI = FALSE)
   stops2 = spTransform(stops2,crs1)
 
   # create an spdf from the shapes
